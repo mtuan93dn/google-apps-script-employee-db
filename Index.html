@@ -1,295 +1,870 @@
-const SHEET_NAME = 'Employees';
-const HEADERS = [
-  'employee_id',
-  'full_name',
-  'position',
-  'department',
-  'division',
-  'phone',
-  'email',
-  'status'
-];
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Database</title>
+    <style>
+      :root {
+        --bg-1: #eefaf7;
+        --bg-2: #eaf3ff;
+        --panel: #ffffff;
+        --primary: #3aa7a1;
+        --primary-strong: #1f8c87;
+        --secondary: #7db7ff;
+        --text: #1f2d3d;
+        --muted: #5f6f82;
+        --border: #dfeaf3;
+        --success: #2ec4a6;
+        --warning: #f6c453;
+        --danger: #ff6b6b;
+        --shadow: 0 12px 30px rgba(86, 122, 149, 0.12);
+      }
 
-function setAllowedEmails() {
-  PropertiesService.getScriptProperties().setProperty(
-    'ALLOWED_EMAILS',
-    'yourmail@example.com,another@example.com'
-  );
-  SpreadsheetApp.getUi().alert('Allowed emails updated.');
-}
+      * {
+        box-sizing: border-box;
+      }
 
-function getAllowedEmails() {
-  const value = PropertiesService.getScriptProperties().getProperty('ALLOWED_EMAILS') || '';
-  return value
-    .split(',')
-    .map(email => email.trim().toLowerCase())
-    .filter(Boolean);
-}
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 100%);
+        color: var(--text);
+      }
 
-function getCurrentUserEmail() {
-  return (Session.getActiveUser().getEmail() || '').toLowerCase();
-}
+      body {
+        padding: 28px;
+      }
 
-function isAuthorizedUser() {
-  const allowed = getAllowedEmails();
-  const current = getCurrentUserEmail();
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
 
-  if (!current) {
-    return false;
-  }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 22px;
+        flex-wrap: wrap;
+      }
 
-  if (allowed.length === 0) {
-    return true;
-  }
+      .title-wrap h1 {
+        margin: 0;
+        font-size: 2rem;
+        color: var(--text);
+      }
 
-  return allowed.includes(current);
-}
+      .title-wrap p {
+        margin: 6px 0 0 0;
+        color: var(--muted);
+        font-size: 0.96rem;
+      }
 
-function doGet() {
-  if (!isAuthorizedUser()) {
-    return HtmlService.createHtmlOutput(
-      '<html><body><h3>Access denied</h3><p>Bạn không có quyền truy cập vào hệ thống.</p></body></html>'
-    ).setTitle('Access denied');
-  }
+      .top-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
 
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle('Employee Database')
-    .setSandboxMode(HtmlService.SandboxMode.IFRAME)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
+      button {
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-family: inherit;
+      }
 
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
+      .btn {
+        padding: 11px 18px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
 
-function getSheet() {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = spreadsheet.getSheetByName(SHEET_NAME);
+      .btn:hover {
+        transform: translateY(-1px);
+      }
 
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(SHEET_NAME);
-  }
+      .btn-primary {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
+        color: white;
+        box-shadow: 0 8px 18px rgba(31, 140, 135, 0.18);
+      }
 
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(HEADERS);
-  } else {
-    const firstRow = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), HEADERS.length)).getValues()[0];
-    const missingHeaders = HEADERS.filter((header, index) => firstRow[index] !== header);
+      .btn-secondary {
+        background: #edf7ff;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
 
-    if (missingHeaders.length > 0) {
-      const targetRange = sheet.getRange(1, 1, 1, HEADERS.length);
-      targetRange.setValues([HEADERS]);
-    }
-  }
+      .btn-success {
+        background: linear-gradient(135deg, #65d6be 0%, #3ec9b0 100%);
+        color: white;
+      }
 
-  return sheet;
-}
+      .btn-danger {
+        background: linear-gradient(135deg, #ff8e8e 0%, #ff5d73 100%);
+        color: white;
+      }
 
-function normalizeRow(row) {
-  const obj = {};
-  HEADERS.forEach((header, index) => {
-    obj[header] = row[index] || '';
-  });
-  return obj;
-}
+      .btn-small {
+        padding: 7px 10px;
+        font-size: 0.8rem;
+      }
 
-function findEmployeeById(employeeId) {
-  const sheet = getSheet();
-  const values = sheet.getDataRange().getValues();
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(180px, 1fr));
+        gap: 16px;
+        margin-bottom: 22px;
+      }
 
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][0]).trim().toLowerCase() === String(employeeId).trim().toLowerCase()) {
-      return i + 1;
-    }
-  }
+      .stat-card {
+        background: var(--panel);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 22px 18px;
+        border: 1px solid var(--border);
+      }
 
-  return null;
-}
+      .stat-card.total {
+        background: linear-gradient(135deg, #edf9ff 0%, #e7f6ff 100%);
+      }
 
-function validateEmployeeData(data) {
-  const employeeId = String(data.employee_id || '').trim();
-  const fullName = String(data.full_name || '').trim();
-  const position = String(data.position || '').trim();
-  const department = String(data.department || '').trim();
-  const division = String(data.division || '').trim();
-  const phone = String(data.phone || '').trim();
-  const email = String(data.email || '').trim();
-  const status = String(data.status || '').trim();
+      .stat-card.active {
+        background: linear-gradient(135deg, #ebfff5 0%, #dffdf2 100%);
+      }
 
-  if (!employeeId) {
-    return { valid: false, message: 'Mã nhân viên không được để trống.' };
-  }
+      .stat-card.inactive {
+        background: linear-gradient(135deg, #fff0f0 0%, #ffe5e5 100%);
+      }
 
-  if (!/^[A-Za-z0-9\-_]+$/.test(employeeId)) {
-    return { valid: false, message: 'Mã nhân viên chỉ được chứa chữ, số, dấu gạch ngang hoặc gạch dưới.' };
-  }
+      .stat-card.paused {
+        background: linear-gradient(135deg, #fff8e8 0%, #fff1c7 100%);
+      }
 
-  if (!fullName) {
-    return { valid: false, message: 'Họ tên không được để trống.' };
-  }
+      .stat-number {
+        font-size: 2.1rem;
+        font-weight: 700;
+        margin-bottom: 6px;
+        color: var(--text);
+      }
 
-  if (!position) {
-    return { valid: false, message: 'Chức vụ không được để trống.' };
-  }
+      .stat-label {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
 
-  if (!department) {
-    return { valid: false, message: 'Bộ phận không được để trống.' };
-  }
+      .filter-panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 18px;
+        margin-bottom: 22px;
+      }
 
-  if (!division) {
-    return { valid: false, message: 'Phòng ban không được để trống.' };
-  }
+      .filter-grid {
+        display: grid;
+        grid-template-columns: 2.1fr 1fr 1fr auto auto;
+        gap: 12px;
+        align-items: end;
+      }
 
-  if (!phone || !/^[0-9+()\s-]{8,15}$/.test(phone)) {
-    return { valid: false, message: 'Số điện thoại không hợp lệ.' };
-  }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return { valid: false, message: 'Email không hợp lệ.' };
-  }
+      label {
+        font-weight: 600;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
 
-  const validStatuses = ['Hoạt động', 'Nghỉ việc', 'Tạm dừng'];
-  if (!validStatuses.includes(status)) {
-    return { valid: false, message: 'Trạng thái không hợp lệ.' };
-  }
+      input, select {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #fff;
+        font-size: 0.95rem;
+        color: var(--text);
+        outline: none;
+        transition: border 0.2s ease, box-shadow 0.2s ease;
+      }
 
-  return { valid: true };
-}
+      input:focus, select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(58, 167, 161, 0.12);
+      }
 
-function getEmployees(filters) {
-  const sheet = getSheet();
-  const data = sheet.getDataRange().getValues();
+      input.error {
+        border-color: var(--danger);
+        box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.12);
+      }
 
-  if (data.length <= 1) {
-    return [];
-  }
+      .error-message {
+        color: var(--danger);
+        font-size: 0.75rem;
+        margin-top: 3px;
+        display: none;
+      }
 
-  const filterObj = filters || {};
-  const keyword = String(filterObj.keyword || '').trim().toLowerCase();
-  const department = String(filterObj.department || '').trim();
-  const status = String(filterObj.status || '').trim();
+      .error-message.show {
+        display: block;
+      }
 
-  const rows = data.slice(1).map((row, index) => ({
-    rowIndex: index + 2,
-    values: normalizeRow(row)
-  }));
+      .table-panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 18px;
+      }
 
-  const filtered = rows.filter(item => {
-    const employee = item.values;
+      .table-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
 
-    const matchesKeyword = !keyword || [
-      employee.employee_id,
-      employee.full_name,
-      employee.position,
-      employee.department,
-      employee.division,
-      employee.email,
-      employee.phone
-    ].some(value => String(value).toLowerCase().includes(keyword));
+      .table-header h2 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
 
-    const matchesDepartment = !department || employee.department === department;
-    const matchesStatus = !status || employee.status === status;
+      .table-wrap {
+        overflow-x: auto;
+      }
 
-    return matchesKeyword && matchesDepartment && matchesStatus;
-  });
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 1000px;
+      }
 
-  return filtered.map(item => item.values);
-}
+      thead {
+        background: linear-gradient(135deg, #dff9f5 0%, #ebf4ff 100%);
+      }
 
-function addEmployee(data) {
-  const validation = validateEmployeeData(data);
-  if (!validation.valid) {
-    throw new Error(validation.message);
-  }
+      th {
+        text-align: left;
+        padding: 12px 14px;
+        color: var(--text);
+        font-size: 0.9rem;
+        border-bottom: 1px solid var(--border);
+      }
 
-  const sheet = getSheet();
-  const employeeId = String(data.employee_id).trim();
+      td {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.9rem;
+        color: var(--text);
+      }
 
-  if (findEmployeeById(employeeId)) {
-    throw new Error('Mã nhân viên đã tồn tại trong hệ thống.');
-  }
+      tbody tr:hover {
+        background: #f8fbff;
+      }
 
-  const row = [
-    employeeId,
-    String(data.full_name || '').trim(),
-    String(data.position || '').trim(),
-    String(data.department || '').trim(),
-    String(data.division || '').trim(),
-    String(data.phone || '').trim(),
-    String(data.email || '').trim(),
-    String(data.status || '').trim()
-  ];
+      .status-badge {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
 
-  sheet.appendRow(row);
+      .status-active {
+        background: #dffdf4;
+        color: #1a8a63;
+      }
 
-  return {
-    success: true,
-    message: 'Thêm nhân viên mới thành công.'
-  };
-}
+      .status-inactive {
+        background: #ffe9e9;
+        color: #d6555d;
+      }
 
-function updateEmployee(data) {
-  const validation = validateEmployeeData(data);
-  if (!validation.valid) {
-    throw new Error(validation.message);
-  }
+      .status-paused {
+        background: #fff5d9;
+        color: #ba7d00;
+      }
 
-  const employeeId = String(data.employee_id || '').trim();
-  const rowNumber = findEmployeeById(employeeId);
+      .action-group {
+        display: flex;
+        gap: 8px;
+      }
 
-  if (!rowNumber) {
-    throw new Error('Không tìm thấy nhân viên để cập nhật.');
-  }
+      .modal-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(22, 30, 40, 0.28);
+        backdrop-filter: blur(3px);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
 
-  const sheet = getSheet();
-  sheet.getRange(rowNumber, 1, 1, HEADERS.length).setValues([[
-    employeeId,
-    String(data.full_name || '').trim(),
-    String(data.position || '').trim(),
-    String(data.department || '').trim(),
-    String(data.division || '').trim(),
-    String(data.phone || '').trim(),
-    String(data.email || '').trim(),
-    String(data.status || '').trim()
-  ]]);
+      .modal-backdrop.open {
+        display: flex;
+      }
 
-  return {
-    success: true,
-    message: 'Cập nhật thông tin nhân viên thành công.'
-  };
-}
+      .modal {
+        width: min(700px, 100%);
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 20px 50px rgba(25, 50, 70, 0.2);
+        padding: 22px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
 
-function deleteEmployee(employeeId) {
-  const id = String(employeeId || '').trim();
-  if (!id) {
-    throw new Error('Vui lòng chọn nhân viên cần xóa.');
-  }
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
 
-  const sheet = getSheet();
-  const rowNumber = findEmployeeById(id);
+      .modal-header h3 {
+        margin: 0;
+        font-size: 1.4rem;
+      }
 
-  if (!rowNumber) {
-    throw new Error('Không tìm thấy nhân viên cần xóa.');
-  }
+      .close-btn {
+        background: transparent;
+        font-size: 1.2rem;
+        color: var(--muted);
+      }
 
-  sheet.deleteRow(rowNumber);
+      .modal-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
 
-  return {
-    success: true,
-    message: 'Xóa nhân viên thành công.'
-  };
-}
+      .modal-grid .field.full {
+        grid-column: 1 / -1;
+      }
 
-function exportEmployees() {
-  const employees = getEmployees({});
+      .modal-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 22px;
+      }
 
-  if (!employees.length) {
-    return 'employee_id,full_name,position,department,division,phone,email,status\n';
-  }
+      .toast {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        background: #1f2d3d;
+        color: white;
+        padding: 12px 16px;
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        font-size: 0.9rem;
+        z-index: 200;
+      }
 
-  const headerLine = HEADERS.join(',');
-  const rows = employees.map(employee => HEADERS.map(field => `"${String(employee[field] || '').replace(/"/g, '""')}"`).join(','));
-  return [headerLine, ...rows].join('\n');
-}
+      .toast.success {
+        background: linear-gradient(135deg, #2ec4a6 0%, #1db38d 100%);
+      }
+
+      .toast.error {
+        background: linear-gradient(135deg, #ff7e7e 0%, #f35d75 100%);
+      }
+
+      @media (max-width: 900px) {
+        .stats-grid {
+          grid-template-columns: repeat(2, minmax(180px, 1fr));
+        }
+
+        .filter-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        body {
+          padding: 16px;
+        }
+
+        .stats-grid,
+        .filter-grid,
+        .modal-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .topbar {
+          align-items: flex-start;
+        }
+
+        .modal {
+          padding: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="topbar">
+        <div class="title-wrap">
+          <h1>👥 Quản lý nhân viên</h1>
+          <p>Hệ thống quản lý danh sách và trạng thái nhân sự</p>
+        </div>
+
+        <div class="top-actions">
+          <button class="btn btn-primary" id="btnAddNew">➕ Thêm mới</button>
+          <button class="btn btn-success" id="exportBtn">📄 Xuất Excel</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card total">
+          <div class="stat-number" id="totalCount">0</div>
+          <div class="stat-label">Tổng nhân viên</div>
+        </div>
+        <div class="stat-card active">
+          <div class="stat-number" id="activeCount">0</div>
+          <div class="stat-label">Đang hoạt động</div>
+        </div>
+        <div class="stat-card inactive">
+          <div class="stat-number" id="inactiveCount">0</div>
+          <div class="stat-label">Nghỉ việc</div>
+        </div>
+        <div class="stat-card paused">
+          <div class="stat-number" id="pausedCount">0</div>
+          <div class="stat-label">Tạm dừng</div>
+        </div>
+      </div>
+
+      <div class="filter-panel">
+        <div class="filter-grid">
+          <div class="field">
+            <label>Tìm kiếm</label>
+            <input id="keyword" type="text" placeholder="Mã nhân viên, tên, email, bộ phận...">
+          </div>
+
+          <div class="field">
+            <label>Bộ phận</label>
+            <select id="filterDepartment">
+              <option value="">Tất cả</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Trạng thái</label>
+            <select id="filterStatus">
+              <option value="">Tất cả</option>
+              <option value="Hoạt động">Hoạt động</option>
+              <option value="Nghỉ việc">Nghỉ việc</option>
+              <option value="Tạm dừng">Tạm dừng</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary" id="searchBtn">🔎 Tìm</button>
+          <button class="btn btn-secondary" id="resetBtn">Làm mới</button>
+        </div>
+      </div>
+
+      <div class="table-panel">
+        <div class="table-header">
+          <h2>Danh sách nhân viên</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mã NV</th>
+                <th>Họ tên</th>
+                <th>Chức vụ</th>
+                <th>Bộ phận</th>
+                <th>Phòng ban</th>
+                <th>Số điện thoại</th>
+                <th>Email</th>
+                <th>Trạng thái</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="employeeTableBody">
+              <tr>
+                <td colspan="9" style="text-align:center; color:#7b8da0; padding:36px 0;">Đang tải dữ liệu...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="modalTitle">Thêm nhân viên mới</h3>
+          <button class="close-btn" id="closeModalBtn" type="button">✕</button>
+        </div>
+
+        <form id="employeeForm">
+          <div class="modal-grid">
+            <div class="field">
+              <label for="employeeId">Mã nhân viên</label>
+              <input id="employeeId" name="employee_id" type="text" placeholder="Chỉ chữ và số (VD: EMP001)" required>
+              <div class="error-message" id="employeeIdError"></div>
+            </div>
+
+            <div class="field">
+              <label for="fullName">Họ tên</label>
+              <input id="fullName" name="full_name" type="text" required>
+              <div class="error-message" id="fullNameError"></div>
+            </div>
+
+            <div class="field">
+              <label for="position">Chức vụ</label>
+              <input id="position" name="position" type="text" required>
+              <div class="error-message" id="positionError"></div>
+            </div>
+
+            <div class="field">
+              <label for="department">Bộ phận</label>
+              <input id="department" name="department" type="text" required>
+              <div class="error-message" id="departmentError"></div>
+            </div>
+
+            <div class="field">
+              <label for="division">Phòng ban</label>
+              <input id="division" name="division" type="text" required>
+              <div class="error-message" id="divisionError"></div>
+            </div>
+
+            <div class="field">
+              <label for="phone">Số điện thoại</label>
+              <input id="phone" name="phone" type="text" inputmode="numeric" placeholder="Chỉ được nhập số (VD: 0901234567)" required>
+              <div class="error-message" id="phoneError"></div>
+            </div>
+
+            <div class="field full">
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" required>
+              <div class="error-message" id="emailError"></div>
+            </div>
+
+            <div class="field full">
+              <label for="status">Trạng thái</label>
+              <select id="status" name="status" required>
+                <option value="">-- Chọn trạng thái --</option>
+                <option value="Hoạt động">Hoạt động</option>
+                <option value="Nghỉ việc">Nghỉ việc</option>
+                <option value="Tạm dừng">Tạm dừng</option>
+              </select>
+              <div class="error-message" id="statusError"></div>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button type="submit" class="btn btn-primary" style="flex:1">💾 Lưu</button>
+            <button type="button" class="btn btn-secondary" id="cancelModalBtn" style="flex:1">Hủy</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const modal = document.getElementById('modalBackdrop');
+      const employeeForm = document.getElementById('employeeForm');
+      const employeeTableBody = document.getElementById('employeeTableBody');
+      const keywordInput = document.getElementById('keyword');
+      const filterDepartment = document.getElementById('filterDepartment');
+      const filterStatus = document.getElementById('filterStatus');
+      const employeeIdInput = document.getElementById('employeeId');
+      const phoneInput = document.getElementById('phone');
+
+      let editingEmployeeId = null;
+
+      // Validation functions
+      function validateEmployeeId(value) {
+        const trimmed = value.trim();
+        // Chỉ cho phép chữ cái (không dấu) và số
+        const regex = /^[A-Za-z0-9]+$/;
+        return regex.test(trimmed) ? '' : 'Mã nhân viên chỉ được chứa chữ cái và số, không được có ký tự đặc biệt, khoảng trắng hoặc dấu.';
+      }
+
+      function validatePhone(value) {
+        const trimmed = value.trim();
+        // Chỉ cho phép số
+        const regex = /^[0-9]+$/;
+        return regex.test(trimmed) ? '' : 'Số điện thoại chỉ được chứa ký tự số.';
+      }
+
+      // Real-time validation
+      employeeIdInput.addEventListener('blur', () => {
+        const error = validateEmployeeId(employeeIdInput.value);
+        const errorEl = document.getElementById('employeeIdError');
+        if (error) {
+          employeeIdInput.classList.add('error');
+          errorEl.textContent = error;
+          errorEl.classList.add('show');
+        } else {
+          employeeIdInput.classList.remove('error');
+          errorEl.classList.remove('show');
+        }
+      });
+
+      employeeIdInput.addEventListener('input', () => {
+        if (employeeIdInput.classList.contains('error')) {
+          const error = validateEmployeeId(employeeIdInput.value);
+          const errorEl = document.getElementById('employeeIdError');
+          if (!error) {
+            employeeIdInput.classList.remove('error');
+            errorEl.classList.remove('show');
+          }
+        }
+      });
+
+      phoneInput.addEventListener('blur', () => {
+        const error = validatePhone(phoneInput.value);
+        const errorEl = document.getElementById('phoneError');
+        if (error) {
+          phoneInput.classList.add('error');
+          errorEl.textContent = error;
+          errorEl.classList.add('show');
+        } else {
+          phoneInput.classList.remove('error');
+          errorEl.classList.remove('show');
+        }
+      });
+
+      phoneInput.addEventListener('input', () => {
+        // Chỉ cho phép số
+        phoneInput.value = phoneInput.value.replace(/[^0-9]/g, '');
+        if (phoneInput.classList.contains('error')) {
+          const error = validatePhone(phoneInput.value);
+          const errorEl = document.getElementById('phoneError');
+          if (!error) {
+            phoneInput.classList.remove('error');
+            errorEl.classList.remove('show');
+          }
+        }
+      });
+
+      function showToast(message, isError = false) {
+        const toast = document.createElement('div');
+        toast.className = 'toast ' + (isError ? 'error' : 'success');
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+          toast.remove();
+        }, 2600);
+      }
+
+      function renderStatus(status) {
+        const statusMap = {
+          'Hoạt động': 'status-active',
+          'Nghỉ việc': 'status-inactive',
+          'Tạm dừng': 'status-paused'
+        };
+
+        const cssClass = statusMap[status] || '';
+        return `<span class="status-badge ${cssClass}">${status || ''}</span>`;
+      }
+
+      function updateStats(employees) {
+        document.getElementById('totalCount').textContent = employees.length;
+        document.getElementById('activeCount').textContent = employees.filter(x => x.status === 'Hoạt động').length;
+        document.getElementById('inactiveCount').textContent = employees.filter(x => x.status === 'Nghỉ việc').length;
+        document.getElementById('pausedCount').textContent = employees.filter(x => x.status === 'Tạm dừng').length;
+      }
+
+      function renderEmployees(employees) {
+        if (!employees || employees.length === 0) {
+          employeeTableBody.innerHTML = `
+            <tr>
+              <td colspan="9" style="text-align:center; color:#7b8da0; padding:36px 0;">Không có dữ liệu nhân viên</td>
+            </tr>
+          `;
+          updateStats([]);
+          return;
+        }
+
+        const departments = employees.map(e => e.department).filter(Boolean);
+        const uniqueDepartments = [...new Set(departments)].sort();
+
+        filterDepartment.innerHTML = '<option value="">Tất cả</option>' +
+          uniqueDepartments.map(d => `<option value="${d}">${d}</option>`).join('');
+
+        updateStats(employees);
+
+        employeeTableBody.innerHTML = employees.map(emp => `
+          <tr>
+            <td>${emp.employee_id}</td>
+            <td>${emp.full_name}</td>
+            <td>${emp.position}</td>
+            <td>${emp.department}</td>
+            <td>${emp.division}</td>
+            <td>${emp.phone}</td>
+            <td>${emp.email}</td>
+            <td>${renderStatus(emp.status)}</td>
+            <td>
+              <div class="action-group">
+                <button class="btn btn-secondary btn-small edit-btn" data-id="${emp.employee_id}">Sửa</button>
+                <button class="btn btn-danger btn-small delete-btn" data-id="${emp.employee_id}">Xóa</button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+          btn.addEventListener('click', () => openEditForm(btn.dataset.id));
+        });
+
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.addEventListener('click', () => deleteEmployee(btn.dataset.id));
+        });
+      }
+
+      function loadEmployees() {
+        google.script.run
+          .withSuccessHandler(renderEmployees)
+          .withFailureHandler(err => showToast(err.message, true))
+          .getEmployees({
+            keyword: keywordInput.value.trim(),
+            department: filterDepartment.value,
+            status: filterStatus.value
+          });
+      }
+
+      function openModal() {
+        modal.classList.add('open');
+      }
+
+      function closeModal() {
+        modal.classList.remove('open');
+        employeeForm.reset();
+        editingEmployeeId = null;
+        document.getElementById('modalTitle').textContent = 'Thêm nhân viên mới';
+        // Clear error messages
+        document.querySelectorAll('.error-message').forEach(el => el.classList.remove('show'));
+        document.querySelectorAll('input, select').forEach(el => el.classList.remove('error'));
+      }
+
+      document.getElementById('btnAddNew').addEventListener('click', openModal);
+      document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+      document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
+
+      employeeForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        // Validate before submit
+        const employeeIdError = validateEmployeeId(employeeIdInput.value);
+        const phoneError = validatePhone(phoneInput.value);
+
+        if (employeeIdError) {
+          employeeIdInput.classList.add('error');
+          document.getElementById('employeeIdError').textContent = employeeIdError;
+          document.getElementById('employeeIdError').classList.add('show');
+          showToast('Vui lòng kiểm tra mã nhân viên', true);
+          return;
+        }
+
+        if (phoneError) {
+          phoneInput.classList.add('error');
+          document.getElementById('phoneError').textContent = phoneError;
+          document.getElementById('phoneError').classList.add('show');
+          showToast('Vui lòng kiểm tra số điện thoại', true);
+          return;
+        }
+
+        const formData = Object.fromEntries(new FormData(employeeForm).entries());
+
+        const fn = editingEmployeeId ? 'updateEmployee' : 'addEmployee';
+
+        google.script.run
+          .withSuccessHandler((res) => {
+            showToast(res.message);
+            closeModal();
+            loadEmployees();
+          })
+          .withFailureHandler((err) => showToast(err.message, true))
+          [fn](formData);
+      });
+
+      function openEditForm(employeeId) {
+        google.script.run
+          .withSuccessHandler((rows) => {
+            const employee = rows.find(x => x.employee_id === employeeId);
+            if (!employee) {
+              showToast('Không tìm thấy nhân viên.', true);
+              return;
+            }
+
+            editingEmployeeId = employeeId;
+
+            document.getElementById('modalTitle').textContent = 'Cập nhật nhân viên';
+
+            document.getElementById('employeeId').value = employee.employee_id || '';
+            document.getElementById('fullName').value = employee.full_name || '';
+            document.getElementById('position').value = employee.position || '';
+            document.getElementById('department').value = employee.department || '';
+            document.getElementById('division').value = employee.division || '';
+            document.getElementById('phone').value = employee.phone || '';
+            document.getElementById('email').value = employee.email || '';
+            document.getElementById('status').value = employee.status || '';
+
+            openModal();
+          })
+          .withFailureHandler((err) => showToast(err.message, true))
+          .getEmployees({});
+      }
+
+      function deleteEmployee(employeeId) {
+        if (!confirm(`Bạn có chắc chắn muốn xóa nhân viên "${employeeId}" không?`)) {
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler((res) => {
+            showToast(res.message);
+            loadEmployees();
+          })
+          .withFailureHandler((err) => showToast(err.message, true))
+          .deleteEmployee(employeeId);
+      }
+
+      document.getElementById('searchBtn').addEventListener('click', loadEmployees);
+      document.getElementById('resetBtn').addEventListener('click', () => {
+        keywordInput.value = '';
+        filterDepartment.value = '';
+        filterStatus.value = '';
+        loadEmployees();
+      });
+
+      keywordInput.addEventListener('input', loadEmployees);
+      filterDepartment.addEventListener('change', loadEmployees);
+      filterStatus.addEventListener('change', loadEmployees);
+
+      document.getElementById('exportBtn').addEventListener('click', () => {
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (res && res.url) {
+              window.open(res.url, '_blank');
+              showToast('Xuất Excel thành công.');
+            } else {
+              showToast('Không thể xuất Excel.', true);
+            }
+          })
+          .withFailureHandler((err) => showToast(err.message, true))
+          .exportToExcel();
+      });
+
+      window.addEventListener('load', loadEmployees);
+    </script>
+  </body>
+</html>
