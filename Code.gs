@@ -121,8 +121,8 @@ function validateEmployeeData(data) {
     return { valid: false, message: 'Mã nhân viên không được để trống.' };
   }
 
-  if (!/^[A-Za-z0-9\-_]+$/.test(employeeId)) {
-    return { valid: false, message: 'Mã nhân viên chỉ được chứa chữ, số, dấu gạch ngang hoặc gạch dưới.' };
+  if (!/^[A-Za-z0-9]+$/.test(employeeId)) {
+    return { valid: false, message: 'Mã nhân viên chỉ được chứa chữ cái và số.' };
   }
 
   if (!fullName) {
@@ -141,8 +141,8 @@ function validateEmployeeData(data) {
     return { valid: false, message: 'Phòng ban không được để trống.' };
   }
 
-  if (!phone || !/^[0-9+()\s-]{8,15}$/.test(phone)) {
-    return { valid: false, message: 'Số điện thoại không hợp lệ.' };
+  if (!phone || !/^[0-9]+$/.test(phone)) {
+    return { valid: false, message: 'Số điện thoại chỉ được chứa số.' };
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -284,15 +284,12 @@ function deleteEmployee(employeeId) {
 
 function exportToExcel() {
   const employees = getEmployees({});
-  const sheet = getSheet();
-  
-  // Tạo một sheet tạm thời để export
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const exportSheet = spreadsheet.insertSheet('Export_' + Date.now());
-  
+
   // Thêm header
   exportSheet.appendRow(HEADERS);
-  
+
   // Thêm dữ liệu
   if (employees.length > 0) {
     employees.forEach(emp => {
@@ -308,31 +305,25 @@ function exportToExcel() {
       ]);
     });
   }
-  
+
   // Format header
   const headerRange = exportSheet.getRange(1, 1, 1, HEADERS.length);
   headerRange.setBackground('#4F81BD');
   headerRange.setFontColor('#FFFFFF');
   headerRange.setFontWeight('bold');
-  
+
   // Auto-resize columns
   for (let i = 1; i <= HEADERS.length; i++) {
     exportSheet.autoResizeColumn(i);
   }
-  
-  // Lấy URL của file
-  const fileId = spreadsheet.getId();
-  const exportSheetId = exportSheet.getSheetId();
-  
-  // Xóa sheet tạm sau 2 giây
-  Utilities.sleep(1000);
+
+  SpreadsheetApp.flush();
+
+  // Tạo URL export dạng Excel
+  const fileUrl = 'https://docs.google.com/spreadsheets/d/' + spreadsheet.getId() + '/export?format=xlsx';
+
+  // Xóa sheet tạm
   spreadsheet.deleteSheet(exportSheet);
-  
-  // Trả về URL export dạng xlsx
-  const exportUrl = 'https://docs.google.com/spreadsheets/d/' + fileId + '/export?format=xlsx&gid=' + exportSheetId;
-  
-  return {
-    success: true,
-    url: 'https://docs.google.com/spreadsheets/d/' + fileId + '/export?format=xlsx'
-  };
+
+  return { success: true, url: fileUrl };
 }
