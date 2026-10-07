@@ -1,0 +1,196 @@
+const employeeForm = document.getElementById('employeeForm');
+const employeeTableBody = document.getElementById('employeeTableBody');
+const keywordInput = document.getElementById('keyword');
+const filterDepartment = document.getElementById('filterDepartment');
+const filterStatus = document.getElementById('filterStatus');
+const formTitle = document.getElementById('formTitle');
+const resetBtn = document.getElementById('resetBtn');
+const exportBtn = document.getElementById('exportBtn');
+
+let editingEmployeeId = null;
+
+function showMessage(message, isError = false) {
+  const existing = document.getElementById('toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'toast';
+  toast.textContent = message;
+  toast.style.position = 'fixed';
+  toast.style.bottom = '20px';
+  toast.style.right = '20px';
+  toast.style.padding = '12px 16px';
+  toast.style.borderRadius = '8px';
+  toast.style.background = isError ? '#dc2626' : '#16a34a';
+  toast.style.color = '#fff';
+  toast.style.fontWeight = '600';
+  toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+  toast.style.zIndex = '9999';
+
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+function resetForm() {
+  employeeForm.reset();
+  editingEmployeeId = null;
+  formTitle.textContent = 'Thêm nhân viên mới';
+  document.getElementById('employeeId').focus();
+}
+
+function renderStatus(status) {
+  const normalized = String(status || '').trim();
+  let className = 'status-badge';
+
+  if (normalized === 'Hoạt động') {
+    className += ' status-active';
+  } else if (normalized === 'Nghỉ việc') {
+    className += ' status-inactive';
+  } else if (normalized === 'Tạm dừng') {
+    className += ' status-paused';
+  }
+
+  return `<span class="${className}">${normalized || '—'}</span>`;
+}
+
+function fillDepartmentOptions(departments) {
+  const values = [...new Set(departments.filter(Boolean))].sort();
+  filterDepartment.innerHTML = '<option value="">Tất cả bộ phận</option>' + values.map(value => `<option value="${value}">${value}</option>`).join('');
+}
+
+function renderEmployees(employees) {
+  if (!employees || !employees.length) {
+    employeeTableBody.innerHTML = '<tr><td colspan="9">Không có dữ liệu nhân viên.</td></tr>';
+    return;
+  }
+
+  const departments = employees.map(item => item.department).filter(Boolean);
+  fillDepartmentOptions(departments);
+
+  employeeTableBody.innerHTML = employees.map(employee => `
+    <tr>
+      <td>${employee.employee_id || ''}</td>
+      <td>${employee.full_name || ''}</td>
+      <td>${employee.position || ''}</td>
+      <td>${employee.department || ''}</td>
+      <td>${employee.division || ''}</td>
+      <td>${employee.phone || ''}</td>
+      <td>${employee.email || ''}</td>
+      <td>${renderStatus(employee.status)}</td>
+      <td>
+        <div class="action-group">
+          <button class="small-btn edit-btn" data-id="${employee.employee_id}">Sửa</button>
+          <button class="small-btn delete-btn" data-id="${employee.employee_id}">Xóa</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  document.querySelectorAll('.edit-btn').forEach(button => {
+    button.addEventListener('click', () => loadEmployeeToForm(button.dataset.id));
+  });
+
+  document.querySelectorAll('.delete-btn').forEach(button => {
+    button.addEventListener('click', () => deleteEmployee(button.dataset.id));
+  });
+}
+
+function loadEmployees() {
+  const payload = {
+    keyword: keywordInput.value,
+    department: filterDepartment.value,
+    status: filterStatus.value
+  };
+
+  google.script.run
+    .withSuccessHandler(renderEmployees)
+    .withFailureHandler(error => showMessage(error.message, true))
+    .getEmployees(payload);
+}
+
+function submitEmployee(event) {
+  event.preventDefault();
+
+  const formData = Object.fromEntries(new FormData(employeeForm).entries());
+
+  const operation = editingEmployeeId ? 'updateEmployee' : 'addEmployee';
+
+  google.script.run
+    .withSuccessHandler(response => {
+      showMessage(response.message);
+      resetForm();
+      loadEmployees();
+    })
+    .withFailureHandler(error => showMessage(error.message, true))
+    [operation](formData);
+}
+
+function loadEmployeeToForm(employeeId) {
+  google.script.run
+    .withSuccessHandler(employees => {
+      const employee = employees.find(item => item.employee_id === employeeId);
+      if (!employee) {
+        showMessage('Không tìm thấy nhân viên.', true);
+        return;
+      }
+
+      editingEmployeeId = employee.employee_id;
+      formTitle.textContent = 'Cập nhật thông tin nhân viên';
+
+      document.getElementById('employeeId').value = employee.employee_id || '';
+      document.getElementById('fullName').value = employee.full_name || '';
+      document.getElementById('position').value = employee.position || '';
+      document.getElementById('department').value = employee.department || '';
+      document.getElementById('division').value = employee.division || '';
+      document.getElementById('phone').value = employee.phone || '';
+      document.getElementById('email').value = employee.email || '';
+      document.getElementById('status').value = employee.status || '';
+      document.getElementById('employeeId').focus();
+    })
+    .withFailureHandler(error => showMessage(error.message, true))
+    .getEmployees({});
+}
+
+function deleteEmployee(employeeId) {
+  const confirmed = window.confirm(`Bạn có chắc chắn muốn xóa nhân viên ${employeeId}?`);
+  if (!confirmed) return;
+
+  google.script.run
+    .withSuccessHandler(response => {
+      showMessage(response.message);
+      loadEmployees();
+      if (editingEmployeeId === employeeId) {
+        resetForm();
+      }
+    })
+    .withFailureHandler(error => showMessage(error.message, true))
+    .deleteEmployee(employeeId);
+}
+
+function exportEmployeeList() {
+  google.script.run
+    .withSuccessHandler(csv => {
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'employees.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showMessage('Xuất danh sách thành công.');
+    })
+    .withFailureHandler(error => showMessage(error.message, true))
+    .exportEmployees();
+}
+
+employeeForm.addEventListener('submit', submitEmployee);
+resetBtn.addEventListener('click', resetForm);
+keywordInput.addEventListener('input', loadEmployees);
+filterDepartment.addEventListener('change', loadEmployees);
+filterStatus.addEventListener('change', loadEmployees);
+document.getElementById('searchBtn').addEventListener('click', loadEmployees);
+exportBtn.addEventListener('click', exportEmployeeList);
+
+window.addEventListener('DOMContentLoaded', loadEmployees);

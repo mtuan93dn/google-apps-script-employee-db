@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Database</title>
+    <?!= include('Styles'); ?>
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <h1>Quản lý nhân viên</h1>
+        <button id="exportBtn" class="primary-btn">Xuất danh sách</button>
+      </header>
+
+      <section class="panel">
+        <h2 id="formTitle">Thêm nhân viên mới</h2>
+        <form id="employeeForm">
+          <div class="form-grid">
+            <div class="field">
+              <label for="employeeId">Mã nhân viên</label>
+              <input id="employeeId" name="employee_id" type="text" required>
+            </div>
+
+            <div class="field">
+              <label for="fullName">Họ tên</label>
+              <input id="fullName" name="full_name" type="text" required>
+            </div>
+
+            <div class="field">
+              <label for="position">Chức vụ</label>
+              <input id="position" name="position" type="text" required>
+            </div>
+
+            <div class="field">
+              <label for="department">Bộ phận</label>
+              <input id="department" name="department" type="text" required>
+            </div>
+
+            <div class="field">
+              <label for="division">Phòng ban</label>
+              <input id="division" name="division" type="text" required>
+            </div>
+
+            <div class="field">
+              <label for="phone">Số điện thoại</label>
+              <input id="phone" name="phone" type="tel" required>
+            </div>
+
+            <div class="field">
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" required>
+            </div>
+
+            <div class="field">
+              <label for="status">Trạng thái hoạt động</label>
+              <select id="status" name="status" required>
+                <option value="">-- Chọn --</option>
+                <option value="Hoạt động">Hoạt động</option>
+                <option value="Nghỉ việc">Nghỉ việc</option>
+                <option value="Tạm dừng">Tạm dừng</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="primary-btn">Lưu</button>
+            <button type="button" id="resetBtn" class="secondary-btn">Reset</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Tìm kiếm / lọc</h2>
+        <div class="filter-row">
+          <input id="keyword" type="text" placeholder="Tìm theo mã, tên, email, phòng ban...">
+          <select id="filterDepartment">
+            <option value="">Tất cả bộ phận</option>
+          </select>
+          <select id="filterStatus">
+            <option value="">Tất cả trạng thái</option>
+            <option value="Hoạt động">Hoạt động</option>
+            <option value="Nghỉ việc">Nghỉ việc</option>
+            <option value="Tạm dừng">Tạm dừng</option>
+          </select>
+          <button id="searchBtn" class="primary-btn">Tìm kiếm</button>
+        </div>
+      </section>
+
+      <section class="panel table-panel">
+        <h2>Danh sách nhân viên</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mã NV</th>
+                <th>Họ tên</th>
+                <th>Chức vụ</th>
+                <th>Bộ phận</th>
+                <th>Phòng ban</th>
+                <th>SĐT</th>
+                <th>Email</th>
+                <th>Trạng thái</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="employeeTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <?!= include('Script'); ?>
+  </body>
+</html>
